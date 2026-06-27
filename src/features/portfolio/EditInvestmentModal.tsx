@@ -12,8 +12,17 @@ interface EditInvestmentModalProps {
   onUpdate: (id: string, item: Omit<PortfolioItem, 'id'>) => Promise<void>;
 }
 
+interface FormData {
+  ticker: string;
+  name: string;
+  shares: string;
+  avgPrice: string;
+  currentPrice: string;
+  dailyChange: string;
+}
+
 export default function EditInvestmentModal({ isOpen, item, onClose, onUpdate }: EditInvestmentModalProps) {
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormData>({
     ticker: '',
     name: '',
     shares: '',
@@ -25,8 +34,10 @@ export default function EditInvestmentModal({ isOpen, item, onClose, onUpdate }:
   const [loading, setLoading] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
 
+  // Update form data when item changes (intentional setState in effect to sync form with prop)
   useEffect(() => {
-    if (item && isOpen) {
+    if (item) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setFormData({
         ticker: item.ticker,
         name: item.name,
@@ -35,24 +46,8 @@ export default function EditInvestmentModal({ isOpen, item, onClose, onUpdate }:
         currentPrice: item.currentPrice.toString(),
         dailyChange: item.dailyChange.toString(),
       });
-      setError('');
     }
-  }, [item, isOpen]);
-
-  useEffect(() => {
-    function handleEscape(e: KeyboardEvent) {
-      if (e.key === 'Escape' && isOpen) {
-        onClose();
-      }
-    }
-
-    if (isOpen) {
-      document.addEventListener('keydown', handleEscape);
-      return () => document.removeEventListener('keydown', handleEscape);
-    }
-  }, [isOpen, onClose]);
-
-  if (!isOpen || !item) return null;
+  }, [item]);
 
   const validateForm = (): boolean => {
     setError('');
@@ -88,12 +83,29 @@ export default function EditInvestmentModal({ isOpen, item, onClose, onUpdate }:
     return true;
   };
 
+  useEffect(() => {
+    function handleEscape(e: KeyboardEvent) {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    }
+
+    if (isOpen) {
+      document.addEventListener('keydown', handleEscape);
+      return () => document.removeEventListener('keydown', handleEscape);
+    }
+  }, [isOpen, onClose]);
+
+  if (!isOpen || !item) return null;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!validateForm()) {
       return;
     }
+
+    if (!item) return;
 
     setLoading(true);
     try {

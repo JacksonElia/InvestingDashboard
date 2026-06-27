@@ -27,22 +27,21 @@ export default function Portfolio() {
   const tickers = useMemo(() => items.map(item => item.ticker).sort(), [items]);
 
   // Auto-fetch prices when portfolio items load or tickers change
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (tickers.length === 0) {
       return;
     }
 
-    console.log('[Portfolio] Fetching prices for tickers:', tickers);
-
     let isMounted = true;
-    setFetchingPrices(new Set(tickers));
 
-    fetchMultiplePrices(tickers)
-      .then(priceMap => {
+    const fetchPrices = async () => {
+      setFetchingPrices(new Set(tickers));
+
+      try {
+        const priceMap = await fetchMultiplePrices(tickers);
+        
         if (!isMounted) return;
 
-        console.log('[Portfolio] Prices fetched successfully:', Object.fromEntries(priceMap));
         setPrices(priceMap);
         setPriceFetchError(null);
 
@@ -66,15 +65,16 @@ export default function Portfolio() {
         });
 
         setFetchingPrices(new Set());
-      })
-      .catch(err => {
+      } catch (err) {
         if (!isMounted) return;
 
         const errorMsg = err instanceof Error ? err.message : 'Failed to fetch prices';
-        console.error('[Portfolio] Price fetch error:', errorMsg);
         setPriceFetchError(errorMsg);
         setFetchingPrices(new Set());
-      });
+      }
+    };
+
+    void fetchPrices();
 
     return () => {
       isMounted = false;
