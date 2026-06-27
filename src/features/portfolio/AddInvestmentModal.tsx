@@ -3,8 +3,8 @@ import type { PortfolioItem } from '../../types';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Card } from '../../components/ui/Card';
-import { X, Loader } from 'lucide-react';
-import { fetchStockPrice } from '../../lib/stockPriceService';
+import { X } from 'lucide-react';
+import { fetchStockInfo } from '../../lib/stockPriceService';
 
 interface AddInvestmentModalProps {
   isOpen: boolean;
@@ -23,10 +23,8 @@ export default function AddInvestmentModal({ isOpen, onClose, onAdd }: AddInvest
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [fetchingPrice, setFetchingPrice] = useState(false);
   const [priceError, setPriceError] = useState('');
   const dialogRef = useRef<HTMLDivElement>(null);
-  const priceAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     function handleEscape(e: KeyboardEvent) {
@@ -41,13 +39,6 @@ export default function AddInvestmentModal({ isOpen, onClose, onAdd }: AddInvest
     }
   }, [isOpen, onClose]);
 
-  useEffect(() => {
-    return () => {
-      // Clean up any pending price fetches when component unmounts
-      priceAbortRef.current?.abort();
-    };
-  }, []);
-
   const handleFetchPrice = async (ticker: string) => {
     const trimmedTicker = ticker.trim();
     if (!trimmedTicker) {
@@ -55,32 +46,25 @@ export default function AddInvestmentModal({ isOpen, onClose, onAdd }: AddInvest
       return;
     }
 
-    console.log(`[AddInvestmentModal] Fetching price for ${trimmedTicker}`);
     setPriceError('');
-    setFetchingPrice(true);
-    priceAbortRef.current?.abort();
-    priceAbortRef.current = new AbortController();
 
     try {
-      const price = await fetchStockPrice(trimmedTicker);
-      console.log(`[AddInvestmentModal] Price fetch successful for ${trimmedTicker}: $${price}`);
+      const { price, name } = await fetchStockInfo(trimmedTicker);
       setFormData(prev => ({
         ...prev,
         currentPrice: price.toFixed(2),
+        name,
       }));
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch price';
-      console.error(`[AddInvestmentModal] Price fetch error for ${trimmedTicker}:`, message);
       setPriceError(message);
-    } finally {
-      setFetchingPrice(false);
     }
   };
 
   const handleTickerBlur = (e: React.FocusEvent<HTMLInputElement>) => {
     const ticker = e.target.value.trim();
     if (ticker && !formData.currentPrice) {
-      handleFetchPrice(ticker);
+      void handleFetchPrice(ticker);
     }
   };
 
@@ -117,11 +101,10 @@ export default function AddInvestmentModal({ isOpen, onClose, onAdd }: AddInvest
 
     const avgPrice = parseFloat(formData.avgPrice);
     if (!formData.avgPrice.trim() || isNaN(avgPrice) || avgPrice <= 0) {
-      setError('Average price must be a positive number');
+      setError('Price when bought must be a positive number');
       return false;
     }
 
-    // Current price is optional - portfolio will fetch it on load
     if (formData.currentPrice.trim()) {
       const currentPrice = parseFloat(formData.currentPrice);
       if (isNaN(currentPrice) || currentPrice <= 0) {
@@ -142,14 +125,32 @@ export default function AddInvestmentModal({ isOpen, onClose, onAdd }: AddInvest
 
     setLoading(true);
     try {
-      // If current price is empty, use avgPrice as fallback
-      const currentPrice = formData.currentPrice.trim() 
+      let currentPrice = formData.currentPrice.trim()
         ? parseFloat(formData.currentPrice)
         : parseFloat(formData.avgPrice);
+      let companyName = formData.name.trim();
+
+      if (!formData.currentPrice.trim()) {
+        try {
+          const stockInfo = await fetchStockInfo(formData.ticker.trim());
+          currentPrice = stockInfo.price;
+          companyName = stockInfo.name;
+          setFormData(prev => ({
+            ...prev,
+            currentPrice: currentPrice.toFixed(2),
+            name: companyName,
+          }));
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Failed to fetch price';
+          setPriceError(message);
+          currentPrice = parseFloat(formData.avgPrice);
+          companyName = formData.ticker.trim().toUpperCase();
+        }
+      }
 
       await onAdd({
         ticker: formData.ticker.trim().toUpperCase(),
-        name: formData.name.trim(),
+        name: companyName || formData.ticker.trim().toUpperCase(),
         shares: parseFloat(formData.shares),
         avgPrice: parseFloat(formData.avgPrice),
         currentPrice,
@@ -176,6 +177,16 @@ export default function AddInvestmentModal({ isOpen, onClose, onAdd }: AddInvest
     if (dialogRef.current && e.target === dialogRef.current) {
       onClose();
     }
+  };
+
+  const handleTickerChange = (value: string) => {
+    setFormData({
+      ...formData,
+      ticker: value,
+      name: '',
+      currentPrice: '',
+    });
+    setPriceError('');
   };
 
   return (
@@ -212,31 +223,11 @@ export default function AddInvestmentModal({ isOpen, onClose, onAdd }: AddInvest
                 type="text"
                 placeholder="e.g., AAPL"
                 value={formData.ticker}
-                onChange={(e) => {
-                  setFormData({ ...formData, ticker: e.target.value });
-                  setPriceError('');
-                }}
+                onChange={(e) => handleTickerChange(e.target.value)}
                 onBlur={handleTickerBlur}
                 onKeyDown={handleTickerKeyDown}
-                disabled={loading || fetchingPrice}
+                disabled={loading}
               />
-              {formData.ticker && !fetchingPrice && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="px-3 h-10"
-                  onClick={() => handleFetchPrice(formData.ticker)}
-                  disabled={loading}
-                  title="Fetch current price"
-                >
-                  Get Price
-                </Button>
-              )}
-              {fetchingPrice && (
-                <div className="flex items-center justify-center px-3">
-                  <Loader className="h-4 w-4 text-blue-400 animate-spin" />
-                </div>
-              )}
             </div>
             {priceError && (
               <p className="text-xs text-red-400 mt-1">{priceError}</p>
@@ -245,13 +236,13 @@ export default function AddInvestmentModal({ isOpen, onClose, onAdd }: AddInvest
 
           <div>
             <label className="block text-sm font-medium text-white mb-2">
-              Company Name
+              Company Name (auto-filled)
             </label>
             <Input
               type="text"
-              placeholder="e.g., Apple Inc."
+              placeholder="Fetched automatically from the ticker"
               value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              readOnly
               disabled={loading}
             />
           </div>
@@ -273,7 +264,7 @@ export default function AddInvestmentModal({ isOpen, onClose, onAdd }: AddInvest
 
             <div>
               <label className="block text-sm font-medium text-white mb-2">
-                Avg Price ($)
+                Price When Bought ($)
               </label>
               <Input
                 type="number"
@@ -296,9 +287,12 @@ export default function AddInvestmentModal({ isOpen, onClose, onAdd }: AddInvest
                 placeholder="180.00"
                 step="0.01"
                 value={formData.currentPrice}
-                onChange={(e) => setFormData({ ...formData, currentPrice: e.target.value })}
+                readOnly
                 disabled={loading}
               />
+              <p className="mt-1 text-xs text-textMuted">
+                Fetched automatically from the ticker.
+              </p>
             </div>
 
             <div>

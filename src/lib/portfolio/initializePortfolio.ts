@@ -1,19 +1,19 @@
 import { portfolioRepository } from '../../services/portfolioService';
-import { mockPortfolio } from '../mockData';
 
 export async function initializePortfolioIfEmpty(): Promise<void> {
   const items = await portfolioRepository.getAll();
-  
+
+  const starterTickers = ['AAPL', 'MSFT', 'NVDA', 'TSLA'];
+  const hasLegacyStarterPortfolio =
+    items.length === starterTickers.length &&
+    items.every(item => starterTickers.includes(item.ticker.toUpperCase()));
+
+  if (hasLegacyStarterPortfolio) {
+    localStorage.removeItem('portfolio_items');
+    return;
+  }
+
   if (items.length === 0) {
-    for (const item of mockPortfolio) {
-      await portfolioRepository.add({
-        ticker: item.ticker,
-        name: item.name,
-        shares: item.shares,
-        avgPrice: item.avgPrice,
-        currentPrice: item.currentPrice,
-        dailyChange: item.dailyChange,
-      });
-    }
+    return;
   }
 }

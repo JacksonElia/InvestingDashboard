@@ -25,7 +25,7 @@ export class LocalStoragePortfolioRepository implements PortfolioRepository {
     const items = await this.getAll();
     const newItem: PortfolioItem = {
       ...item,
-      id: Date.now().toString(),
+      id: crypto.randomUUID(),
     };
     items.push(newItem);
     localStorage.setItem(this.key, JSON.stringify(items));

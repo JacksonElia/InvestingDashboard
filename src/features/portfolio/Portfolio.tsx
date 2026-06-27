@@ -203,7 +203,7 @@ export default function Portfolio() {
                   <tr>
                     <th className="px-6 py-4 font-medium">Asset</th>
                     <th className="px-6 py-4 font-medium">Shares</th>
-                    <th className="px-6 py-4 font-medium">Avg Price</th>
+                    <th className="px-6 py-4 font-medium">Price When Bought</th>
                     <th className="px-6 py-4 font-medium">Current Price</th>
                     <th className="px-6 py-4 font-medium">Total Value</th>
                     <th className="px-6 py-4 font-medium">Today's Return</th>

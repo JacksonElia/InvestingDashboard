@@ -1,5 +1,6 @@
 interface BackendPrices {
   prices: Record<string, number | null>;
+  names: Record<string, string | null>;
   timestamp: string;
 }
 
@@ -7,16 +8,20 @@ interface BackendPrices {
 const API_URL = import.meta.env.VITE_API_URL || '/api/stock-price';
 
 // Local cache for prices on the client side
-const priceCache = new Map<string, { price: number; timestamp: number }>();
+const priceCache = new Map<string, { price: number; name: string; timestamp: number }>();
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
-export async function fetchStockPrice(ticker: string): Promise<number> {
+export interface StockInfo {
+  price: number;
+  name: string;
+}
+
+export async function fetchStockInfo(ticker: string): Promise<StockInfo> {
   const normalizedTicker = ticker.toUpperCase().trim();
 
-  // Check local cache first
   const cached = priceCache.get(normalizedTicker);
   if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-    return cached.price;
+    return { price: cached.price, name: cached.name };
   }
 
   try {
@@ -30,22 +35,28 @@ export async function fetchStockPrice(ticker: string): Promise<number> {
 
     const data: BackendPrices = await response.json();
     const price = data.prices[normalizedTicker];
+    const name = data.names?.[normalizedTicker] ?? normalizedTicker;
 
     if (typeof price !== 'number' || isNaN(price) || price <= 0) {
       throw new Error(`Invalid price value for ${normalizedTicker}: ${price}`);
     }
 
-    // Cache the result
     priceCache.set(normalizedTicker, {
       price,
+      name,
       timestamp: Date.now(),
     });
 
-    return price;
+    return { price, name };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     throw new Error(`Unable to fetch price for ${normalizedTicker}: ${errorMessage}`, { cause: error });
   }
+}
+
+export async function fetchStockPrice(ticker: string): Promise<number> {
+  const { price } = await fetchStockInfo(ticker);
+  return price;
 }
 
 export async function fetchMultiplePrices(tickers: string[]): Promise<Map<string, number | null>> {
@@ -70,6 +81,7 @@ export async function fetchMultiplePrices(tickers: string[]): Promise<Map<string
       if (price !== null) {
         priceCache.set(ticker, {
           price,
+          name: data.names?.[ticker] ?? ticker,
           timestamp: Date.now(),
         });
       }
