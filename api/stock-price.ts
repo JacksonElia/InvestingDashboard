@@ -1,17 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import YahooFinance from 'yahoo-finance2';
-
-interface PriceCache {
-  price: number;
-  timestamp: number;
-}
-
-interface CacheStore {
-  [key: string]: PriceCache;
-}
-
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
-const cache: CacheStore = {};
+import { lookupStockData } from '../src/lib/stockPriceLookup';
 
 export default async function handler(
   req: VercelRequest,
@@ -45,40 +33,10 @@ export default async function handler(
   }
 
   try {
-    const yahooFinance = new YahooFinance();
-    const results: Record<string, number | null> = {};
-
-    // Fetch all prices in parallel
-    const promises = tickerList.map(async (ticker) => {
-      const cached = cache[ticker];
-      if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-        return { ticker, price: cached.price };
-      }
-
-      try {
-        const quote = await yahooFinance.quote(ticker);
-        const price = quote.regularMarketPrice
-          ? parseFloat(String(quote.regularMarketPrice))
-          : null;
-        
-        if (price !== null) {
-          cache[ticker] = { price, timestamp: Date.now() };
-        }
-        
-        return { ticker, price };
-      } catch {
-        return { ticker, price: null };
-      }
-    });
-
-    const fetchResults = await Promise.all(promises);
-
-    for (const { ticker, price } of fetchResults) {
-      results[ticker] = price;
-    }
-
+    const results = await lookupStockData(tickerList);
     res.status(200).json({
-      prices: results,
+      prices: results.prices,
+      names: results.names,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {

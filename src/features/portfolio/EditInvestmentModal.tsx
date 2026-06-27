@@ -70,7 +70,7 @@ export default function EditInvestmentModal({ isOpen, item, onClose, onUpdate }:
 
     const avgPrice = parseFloat(formData.avgPrice);
     if (!formData.avgPrice.trim() || isNaN(avgPrice) || avgPrice <= 0) {
-      setError('Average price must be a positive number');
+      setError('Price when bought must be a positive number');
       return false;
     }
 
@@ -200,7 +200,7 @@ export default function EditInvestmentModal({ isOpen, item, onClose, onUpdate }:
 
             <div>
               <label className="block text-sm font-medium text-white mb-2">
-                Avg Price ($)
+                Price When Bought ($)
               </label>
               <Input
                 type="number"

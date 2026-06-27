@@ -1,11 +1,6 @@
 import type { PortfolioItem, NewsArticle, DisruptorCandidate } from '../types';
 
-export const mockPortfolio: PortfolioItem[] = [
-  { id: '1', ticker: 'AAPL', name: 'Apple Inc.', shares: 50, avgPrice: 150.2, currentPrice: 185.4, dailyChange: 1.2 },
-  { id: '2', ticker: 'MSFT', name: 'Microsoft Corp.', shares: 30, avgPrice: 280.0, currentPrice: 420.1, dailyChange: -0.5 },
-  { id: '3', ticker: 'NVDA', name: 'NVIDIA Corp.', shares: 15, avgPrice: 300.0, currentPrice: 850.5, dailyChange: 3.4 },
-  { id: '4', ticker: 'TSLA', name: 'Tesla Inc.', shares: 100, avgPrice: 200.5, currentPrice: 175.2, dailyChange: -2.1 },
-];
+export const mockPortfolio: PortfolioItem[] = [];
 
 export const mockPerformanceData = [
   { month: 'Jan', value: 45000 },
