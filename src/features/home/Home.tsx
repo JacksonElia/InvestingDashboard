@@ -1,15 +1,21 @@
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { Card, CardContent, CardHeader } from '../../components/ui/Card';
-import { mockPerformanceData, mockAllocationData, mockPortfolio } from '../../lib/mockData';
+import { mockPerformanceData, mockAllocationData } from '../../lib/mockData';
+import { usePortfolio } from '../../hooks/usePortfolio';
+import { calculatePortfolioStats, calculateAllocation } from '../../lib/portfolio/analytics';
 import { TrendingUp, DollarSign, Activity } from 'lucide-react';
 
 const COLORS = ['#ff325a', '#cc2848', '#ff5b7b', '#4a111f'];
 
 export default function Home() {
-  const totalValue = mockPortfolio.reduce((acc, curr) => acc + (curr.shares * curr.currentPrice), 0);
-  const totalCost = mockPortfolio.reduce((acc, curr) => acc + (curr.shares * curr.avgPrice), 0);
-  const totalGain = totalValue - totalCost;
-  const gainPercent = (totalGain / totalCost) * 100;
+  const { items: portfolio } = usePortfolio();
+  const stats = calculatePortfolioStats(portfolio);
+  const allocation = calculateAllocation(portfolio);
+
+  const allocationForChart = allocation.map(item => ({
+    name: item.ticker,
+    value: Math.round(item.percentOfTotal),
+  }));
 
   return (
     <div className="space-y-6">
@@ -26,7 +32,7 @@ export default function Home() {
             </div>
             <div>
               <p className="text-sm font-medium text-textMuted">Total Balance</p>
-              <h4 className="text-2xl font-bold text-white">${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h4>
+              <h4 className="text-2xl font-bold text-white">${stats.totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h4>
             </div>
           </CardContent>
         </Card>
@@ -39,7 +45,7 @@ export default function Home() {
             <div>
               <p className="text-sm font-medium text-textMuted">Total Return</p>
               <h4 className="text-2xl font-bold text-green-400">
-                +${totalGain.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({gainPercent.toFixed(2)}%)
+                +${stats.totalGain.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({stats.gainPercent.toFixed(2)}%)
               </h4>
             </div>
           </CardContent>
@@ -52,7 +58,7 @@ export default function Home() {
             </div>
             <div>
               <p className="text-sm font-medium text-textMuted">Active Investments</p>
-              <h4 className="text-2xl font-bold text-white">{mockPortfolio.length} Assets</h4>
+              <h4 className="text-2xl font-bold text-white">{stats.assetCount} Assets</h4>
             </div>
           </CardContent>
         </Card>
@@ -80,13 +86,13 @@ export default function Home() {
         </Card>
 
         <Card>
-          <CardHeader title="Asset Allocation" subtitle="By sector" />
+          <CardHeader title="Asset Allocation" subtitle="By ticker" />
           <CardContent>
             <div className="h-[300px] w-full flex items-center justify-center mt-4">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={mockAllocationData}
+                    data={allocationForChart.length > 0 ? allocationForChart : mockAllocationData}
                     cx="50%"
                     cy="50%"
                     innerRadius={60}
@@ -95,7 +101,7 @@ export default function Home() {
                     dataKey="value"
                     stroke="none"
                   >
-                    {mockAllocationData.map((_, index) => (
+                    {(allocationForChart.length > 0 ? allocationForChart : mockAllocationData).map((_, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
@@ -107,7 +113,7 @@ export default function Home() {
               </ResponsiveContainer>
             </div>
             <div className="flex flex-wrap justify-center gap-4 mt-2">
-              {mockAllocationData.map((entry, index) => (
+              {(allocationForChart.length > 0 ? allocationForChart : mockAllocationData).map((entry, index) => (
                 <div key={entry.name} className="flex items-center text-xs text-textMuted">
                   <div className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
                   {entry.name} ({entry.value}%)
