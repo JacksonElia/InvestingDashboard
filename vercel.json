@@ -6,8 +6,8 @@
   },
   "rewrites": [
     {
-      "source": "/api/stock-price",
-      "destination": "/api/stock-price.ts"
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }
