@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -23,25 +23,63 @@ export default function Portfolio() {
 
   const { items, loading, error, addItem, updateItem, deleteItem } = usePortfolio();
 
-  // Auto-fetch prices when portfolio items load
-  useEffect(() => {
-    if (items.length > 0) {
-      const tickers = items.map(item => item.ticker);
-      setFetchingPrices(new Set(tickers));
-      setPriceFetchError(null);
+  // Memoize tickers to avoid unnecessary effect runs
+  const tickers = useMemo(() => items.map(item => item.ticker).sort(), [items]);
 
-      fetchMultiplePrices(tickers)
-        .then(priceMap => {
-          setPrices(priceMap);
-          setFetchingPrices(new Set());
-        })
-        .catch(err => {
-          const errorMsg = err instanceof Error ? err.message : 'Failed to fetch prices';
-          setPriceFetchError(errorMsg);
-          setFetchingPrices(new Set());
-        });
+  // Auto-fetch prices when portfolio items load or tickers change
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (tickers.length === 0) {
+      return;
     }
-  }, [items]);
+
+    console.log('[Portfolio] Fetching prices for tickers:', tickers);
+
+    let isMounted = true;
+    setFetchingPrices(new Set(tickers));
+
+    fetchMultiplePrices(tickers)
+      .then(priceMap => {
+        if (!isMounted) return;
+
+        console.log('[Portfolio] Prices fetched successfully:', Object.fromEntries(priceMap));
+        setPrices(priceMap);
+        setPriceFetchError(null);
+
+        // Save fetched prices to localStorage by updating each portfolio item
+        // Only update if the price actually changed
+        priceMap.forEach((fetchedPrice, ticker) => {
+          if (fetchedPrice !== null) {
+            const item = items.find(i => i.ticker === ticker);
+            if (item && item.currentPrice !== fetchedPrice) {
+              const updatedItem = { ...item, currentPrice: fetchedPrice };
+              updateItem(item.id, {
+                ticker: updatedItem.ticker,
+                name: updatedItem.name,
+                shares: updatedItem.shares,
+                avgPrice: updatedItem.avgPrice,
+                currentPrice: updatedItem.currentPrice,
+                dailyChange: updatedItem.dailyChange,
+              });
+            }
+          }
+        });
+
+        setFetchingPrices(new Set());
+      })
+      .catch(err => {
+        if (!isMounted) return;
+
+        const errorMsg = err instanceof Error ? err.message : 'Failed to fetch prices';
+        console.error('[Portfolio] Price fetch error:', errorMsg);
+        setPriceFetchError(errorMsg);
+        setFetchingPrices(new Set());
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [tickers, items, updateItem]);
 
   const filteredPortfolio = items.filter(item => 
     item.ticker.toLowerCase().includes(searchTerm.toLowerCase()) || 

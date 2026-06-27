@@ -55,6 +55,7 @@ export default function AddInvestmentModal({ isOpen, onClose, onAdd }: AddInvest
       return;
     }
 
+    console.log(`[AddInvestmentModal] Fetching price for ${trimmedTicker}`);
     setPriceError('');
     setFetchingPrice(true);
     priceAbortRef.current?.abort();
@@ -62,12 +63,14 @@ export default function AddInvestmentModal({ isOpen, onClose, onAdd }: AddInvest
 
     try {
       const price = await fetchStockPrice(trimmedTicker);
+      console.log(`[AddInvestmentModal] Price fetch successful for ${trimmedTicker}: $${price}`);
       setFormData(prev => ({
         ...prev,
         currentPrice: price.toFixed(2),
       }));
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch price';
+      console.error(`[AddInvestmentModal] Price fetch error for ${trimmedTicker}:`, message);
       setPriceError(message);
     } finally {
       setFetchingPrice(false);
