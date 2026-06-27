@@ -1,21 +1,27 @@
-import YahooFinance from 'yahoo-finance2';
-
 interface StockQuoteCache {
   price: number;
   name: string;
   timestamp: number;
 }
 
-interface QuoteResult {
-  regularMarketPrice?: number | string | null;
-  longName?: string | null;
-  shortName?: string | null;
-  displayName?: string | null;
-  symbol?: string | null;
+interface NasdaqQuoteResponse {
+  data?: {
+    symbol?: string | null;
+    companyName?: string | null;
+    primaryData?: {
+      lastSalePrice?: string | null;
+    } | null;
+  } | null;
 }
 
 const CACHE_DURATION = 5 * 60 * 1000;
 const cache = new Map<string, StockQuoteCache>();
+const NASDAQ_HEADERS = {
+  Accept: 'application/json, text/plain, */*',
+  'User-Agent': 'Mozilla/5.0',
+  Origin: 'https://www.nasdaq.com',
+  Referer: 'https://www.nasdaq.com/',
+};
 
 export interface StockLookupResult {
   prices: Record<string, number | null>;
@@ -23,30 +29,19 @@ export interface StockLookupResult {
 }
 
 function getCompanyName(
-  quote: QuoteResult,
+  quote: NasdaqQuoteResponse,
   ticker: string
 ): string {
-  const longName = typeof quote.longName === 'string' ? quote.longName : null;
-  const shortName = typeof quote.shortName === 'string' ? quote.shortName : null;
-  const displayName = typeof quote.displayName === 'string' ? quote.displayName : null;
-  const symbol = typeof quote.symbol === 'string' ? quote.symbol : null;
+  const data = quote.data ?? null;
+  const companyName = typeof data?.companyName === 'string' ? data.companyName : null;
+  const symbol = typeof data?.symbol === 'string' ? data.symbol : null;
 
-  return (
-    longName ??
-    shortName ??
-    displayName ??
-    symbol ??
-    ticker
-  );
+  return companyName ?? symbol ?? ticker;
 }
 
 export async function lookupStockData(tickers: string[]): Promise<StockLookupResult> {
   const prices: Record<string, number | null> = {};
   const names: Record<string, string | null> = {};
-
-  const yahooFinance = new YahooFinance({
-    suppressNotices: ['yahooSurvey'],
-  });
 
   const normalizedTickers = Array.from(
     new Set(
@@ -71,33 +66,50 @@ export async function lookupStockData(tickers: string[]): Promise<StockLookupRes
   }
 
   if (uncachedTickers.length > 0) {
-    try {
-      const quotes = await yahooFinance.quote(uncachedTickers, {
-        return: 'object',
-        fields: ['symbol', 'regularMarketPrice', 'longName', 'shortName', 'displayName'],
-      });
+    const quoteResults = await Promise.allSettled(
+      uncachedTickers.map(async (ticker) => {
+        const response = await fetch(
+          `https://api.nasdaq.com/api/quote/${encodeURIComponent(ticker)}/info?assetclass=stocks`,
+          {
+            headers: NASDAQ_HEADERS,
+          }
+        );
 
-      for (const ticker of uncachedTickers) {
-        const quote = quotes[ticker] as QuoteResult | undefined;
-        const priceValue = quote?.regularMarketPrice;
-        const price = typeof priceValue === 'number' ? priceValue : Number(priceValue);
-        const name = quote ? getCompanyName(quote, ticker) : ticker;
-
-        if (Number.isFinite(price) && price > 0) {
-          cache.set(ticker, { price, name, timestamp: Date.now() });
-          prices[ticker] = price;
-          names[ticker] = name;
-          continue;
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
         }
 
-        prices[ticker] = null;
-        names[ticker] = name;
-      }
-    } catch {
-      for (const ticker of uncachedTickers) {
+        return (await response.json()) as NasdaqQuoteResponse;
+      })
+    );
+
+    for (let index = 0; index < uncachedTickers.length; index += 1) {
+      const ticker = uncachedTickers[index];
+      const result = quoteResults[index];
+
+      if (result.status !== 'fulfilled') {
         prices[ticker] = null;
         names[ticker] = ticker;
+        continue;
       }
+
+      const quote = result.value;
+      const priceText = quote.data?.primaryData?.lastSalePrice ?? null;
+      const parsedPrice =
+        typeof priceText === 'string'
+          ? Number(priceText.replace(/[$,]/g, ''))
+          : Number.NaN;
+      const name = getCompanyName(quote, ticker);
+
+      if (Number.isFinite(parsedPrice) && parsedPrice > 0) {
+        cache.set(ticker, { price: parsedPrice, name, timestamp: Date.now() });
+        prices[ticker] = parsedPrice;
+        names[ticker] = name;
+        continue;
+      }
+
+      prices[ticker] = null;
+      names[ticker] = name;
     }
   }
 
