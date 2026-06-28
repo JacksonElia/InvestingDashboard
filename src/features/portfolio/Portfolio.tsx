@@ -206,6 +206,7 @@ export default function Portfolio() {
                     <th className="px-6 py-4 font-medium">Buy Date</th>
                     <th className="px-6 py-4 font-medium">Price When Bought</th>
                     <th className="px-6 py-4 font-medium">Current Price</th>
+                    <th className="px-6 py-4 font-medium">% Change</th>
                     <th className="px-6 py-4 font-medium">Total Value</th>
                     <th className="px-6 py-4 font-medium text-right">Actions</th>
                   </tr>
@@ -214,6 +215,7 @@ export default function Portfolio() {
                   {filteredPortfolio.map((item) => {
                     const { price: displayPrice, isLoading: isPriceLoading } = getDisplayPrice(item);
                     const totalValue = item.shares * displayPrice;
+                    const percentChange = item.avgPrice > 0 ? ((displayPrice - item.avgPrice) / item.avgPrice) * 100 : 0;
                     
                     return (
                       <tr key={item.id} className="hover:bg-surfaceHighlight/30 transition-colors">
@@ -231,6 +233,9 @@ export default function Portfolio() {
                               <Loader className="h-3 w-3 text-blue-400 animate-spin" />
                             )}
                           </div>
+                        </td>
+                        <td className={`px-6 py-4 font-medium ${percentChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {percentChange >= 0 ? '+' : ''}{percentChange.toFixed(2)}%
                         </td>
                         <td className="px-6 py-4 font-medium text-white">${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                         <td className="px-6 py-4 text-right">
@@ -256,7 +261,7 @@ export default function Portfolio() {
                   })}
                   {filteredPortfolio.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="px-6 py-8 text-center text-textMuted">
+                      <td colSpan={8} className="px-6 py-8 text-center text-textMuted">
                         {items.length === 0 ? 'No investments yet. Add your first investment to get started.' : 'No investments found matching your search.'}
                       </td>
                     </tr>

@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader } from '../../components/ui/Card';
 import { mockPerformanceData, mockAllocationData } from '../../lib/mockData';
 import { usePortfolio } from '../../hooks/usePortfolio';
 import { calculatePortfolioStats, calculateAllocation } from '../../lib/portfolio/analytics';
-import { TrendingUp, DollarSign, Activity, Loader } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, Activity, Loader } from 'lucide-react';
 import { fetchHistoricalPerformance } from '../../lib/stockPriceService';
 import type { HistoricalDataPoint } from '../../lib/stockPriceService';
 
@@ -55,13 +55,17 @@ export default function Home() {
         
         <Card>
           <CardContent className="flex items-center p-6">
-            <div className="bg-green-500/10 p-3 rounded-full mr-4">
-              <TrendingUp className="h-6 w-6 text-green-500" />
+            <div className={`p-3 rounded-full mr-4 ${stats.totalGain >= 0 ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
+              {stats.totalGain >= 0 ? (
+                <TrendingUp className="h-6 w-6 text-green-500" />
+              ) : (
+                <TrendingDown className="h-6 w-6 text-red-500" />
+              )}
             </div>
             <div>
               <p className="text-sm font-medium text-textMuted">Total Return</p>
-              <h4 className="text-2xl font-bold text-green-400">
-                +${stats.totalGain.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({stats.gainPercent.toFixed(2)}%)
+              <h4 className={`text-2xl font-bold ${stats.totalGain >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {stats.totalGain >= 0 ? '+' : ''}{stats.totalGain < 0 ? '-' : ''}${Math.abs(stats.totalGain).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({stats.gainPercent > 0 ? '+' : ''}{stats.gainPercent.toFixed(2)}%)
               </h4>
             </div>
           </CardContent>

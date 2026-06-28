@@ -1,8 +1,11 @@
+import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LineChart, Briefcase, Newspaper, Zap, User } from 'lucide-react';
+import { LineChart, Briefcase, Newspaper, Zap, Menu, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 export default function Navbar() {
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
   const navItems = [
     { name: 'Home', path: '/', icon: LineChart },
     { name: 'Portfolio', path: '/portfolio', icon: Briefcase },
@@ -45,14 +48,45 @@ export default function Navbar() {
           </div>
 
           <div className="flex items-center gap-4">
-            {/* Placeholder for future auth */}
-            <button className="flex items-center gap-2 text-sm font-medium text-textMuted hover:text-white transition-colors">
-              <User className="h-5 w-5" />
-              <span>Login</span>
+            {/* Mobile menu button */}
+            <button 
+              className="md:hidden p-2 text-textMuted hover:text-white"
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            >
+              {isMobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
             </button>
           </div>
         </div>
       </div>
+
+      {/* Mobile menu */}
+      {isMobileMenuOpen && (
+        <div className="md:hidden border-t border-surfaceHighlight bg-background/95 backdrop-blur-md">
+          <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <NavLink
+                  key={item.name}
+                  to={item.path}
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className={({ isActive }) =>
+                    cn(
+                      "flex items-center gap-3 px-3 py-2 rounded-md text-base font-medium transition-colors",
+                      isActive
+                        ? "bg-primary text-white"
+                        : "text-textMuted hover:bg-surfaceHighlight hover:text-white"
+                    )
+                  }
+                >
+                  <Icon className="h-5 w-5" />
+                  {item.name}
+                </NavLink>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </nav>
   );
 }
