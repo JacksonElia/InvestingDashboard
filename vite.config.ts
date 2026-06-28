@@ -114,7 +114,7 @@ export default defineConfig({
               throw new Error(`Tavily API returned ${tavilyResponse.status}`);
             }
 
-            const tavilyData = await tavilyResponse.json();
+            const tavilyData: any = await tavilyResponse.json();
             const searchResults = tavilyData.results || [];
 
             if (searchResults.length === 0) {
@@ -166,7 +166,7 @@ CRITICAL: Return ONLY valid JSON. Do not include markdown code blocks.`;
               throw new Error(`Gemini API returned ${geminiResponse.status}: ${errorText}`);
             }
 
-            const geminiData = await geminiResponse.json();
+            const geminiData: any = await geminiResponse.json();
             let responseText = geminiData.candidates[0].content.parts[0].text;
             
             // Clean up possible markdown formatting if the model ignored our instruction
@@ -182,6 +182,122 @@ CRITICAL: Return ONLY valid JSON. Do not include markdown code blocks.`;
             res.statusCode = 500;
             res.setHeader('Content-Type', 'application/json');
             res.end(JSON.stringify({ error: error.message || 'Failed to fetch and process news' }));
+          }
+        });
+        // Disruptors Mock API
+        server.middlewares.use('/api/disruptors', async (req, res) => {
+          if (req.method !== 'GET') {
+            res.statusCode = 405;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ error: 'Method not allowed' }));
+            return;
+          }
+
+          const url = new URL(req.url ?? '', 'http://localhost');
+          const query = url.searchParams.get('query');
+          
+          if (!query) {
+            res.statusCode = 400;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ error: 'Missing query parameter' }));
+            return;
+          }
+
+          const TAVILY_API_KEY = process.env.TAVILY_API_KEY;
+          const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+
+          if (!TAVILY_API_KEY || !GEMINI_API_KEY) {
+            res.statusCode = 500;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ error: 'Server is missing API keys.' }));
+            return;
+          }
+
+          try {
+            const searchTopic = `Top promising public companies startups disruptors in ${query}`;
+            const tavilyResponse = await fetch('https://api.tavily.com/search', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                api_key: TAVILY_API_KEY,
+                query: searchTopic,
+                search_depth: 'advanced',
+                include_images: false,
+                include_answer: false,
+                days_back: 30,
+                max_results: 15,
+              }),
+            });
+
+            if (!tavilyResponse.ok) {
+              throw new Error(`Tavily API returned ${tavilyResponse.status}`);
+            }
+
+            const tavilyData: any = await tavilyResponse.json();
+            const searchResults = tavilyData.results || [];
+
+            if (searchResults.length === 0) {
+              res.statusCode = 200;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify([]));
+              return;
+            }
+
+            const aiPrompt = `
+You are an expert venture capitalist and technology analyst.
+I have searched the web for companies disrupting the following space: "${query}".
+
+Here are the search results:
+${JSON.stringify(searchResults, null, 2)}
+
+Based on these results and your knowledge, identify 3-5 of the most promising public companies (they MUST have a stock ticker) that are disrupting this industry.
+
+Return a JSON array of objects with this exact structure:
+[
+  {
+    "id": "unique-string-id",
+    "ticker": "TICKER_SYMBOL",
+    "name": "Company Name",
+    "industry": "Specific Niche",
+    "thesis": "A 2-3 sentence thesis on WHY they are disruptive and their potential.",
+    "potentialScore": 85,
+    "url": "https://company-website.com or https://finance.yahoo.com/quote/TICKER_SYMBOL"
+  }
+]
+CRITICAL: Return ONLY valid JSON array. Do not include markdown code blocks.`;
+
+            const geminiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{ parts: [{ text: aiPrompt }] }],
+                generationConfig: {
+                  temperature: 0.4,
+                  responseMimeType: 'application/json',
+                }
+              })
+            });
+
+            if (!geminiResponse.ok) {
+              const errorText = await geminiResponse.text();
+              console.error('Gemini API Error Response:', errorText);
+              throw new Error(`Gemini API returned ${geminiResponse.status}: ${errorText}`);
+            }
+
+            const geminiData: any = await geminiResponse.json();
+            let responseText = geminiData.candidates[0].content.parts[0].text;
+            
+            responseText = responseText.replace(/```json/gi, '').replace(/```/g, '').trim();
+            const parsedDisruptors = JSON.parse(responseText);
+
+            res.statusCode = 200;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify(parsedDisruptors));
+          } catch (error: any) {
+            console.error('Error finding disruptors:', error);
+            res.statusCode = 500;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ error: error.message || 'Failed to analyze disruptors' }));
           }
         });
       },
