@@ -14,13 +14,51 @@ interface NewsArticle {
   relatedTickers: string[];
 }
 
+// Module-level cache for news so it doesn't refetch on tab switch
+let cachedNewsData: {
+  topStories: NewsArticle[];
+  otherStories: NewsArticle[];
+  tickersStr: string;
+} | null = null;
+let prefetchPromise: Promise<any> | null = null;
+
+export const prefetchNewsForTickers = (uniqueTickers: string[]) => {
+  if (uniqueTickers.length === 0) return;
+  const tickersStr = uniqueTickers.join(',');
+  
+  if (cachedNewsData && cachedNewsData.tickersStr === tickersStr) {
+    return; // Already cached
+  }
+  
+  if (!prefetchPromise) {
+    const params = new URLSearchParams({ tickers: tickersStr });
+    prefetchPromise = fetch(`/api/news?${params}`)
+      .then(res => {
+        if (!res.ok) throw new Error('Failed to fetch news');
+        return res.json();
+      })
+      .then(data => {
+        cachedNewsData = {
+          topStories: data.top3 || [],
+          otherStories: data.theRest || [],
+          tickersStr
+        };
+        prefetchPromise = null;
+      })
+      .catch(err => {
+        console.error('Prefetch news error:', err);
+        prefetchPromise = null;
+      });
+  }
+};
+
 export default function News() {
   const [searchTerm, setSearchTerm] = useState('');
   const { items, loading: portfolioLoading } = usePortfolio();
   
-  const [topStories, setTopStories] = useState<NewsArticle[]>([]);
-  const [otherStories, setOtherStories] = useState<NewsArticle[]>([]);
-  const [newsLoading, setNewsLoading] = useState(false);
+  const [topStories, setTopStories] = useState<NewsArticle[]>(() => cachedNewsData?.topStories || []);
+  const [otherStories, setOtherStories] = useState<NewsArticle[]>(() => cachedNewsData?.otherStories || []);
+  const [newsLoading, setNewsLoading] = useState(() => !cachedNewsData);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -39,7 +77,28 @@ export default function News() {
           return;
         }
 
-        const params = new URLSearchParams({ tickers: uniqueTickers.join(',') });
+        const tickersStr = uniqueTickers.join(',');
+
+        // Use cache if available and tickers match
+        if (cachedNewsData && cachedNewsData.tickersStr === tickersStr) {
+          setTopStories(cachedNewsData.topStories);
+          setOtherStories(cachedNewsData.otherStories);
+          setNewsLoading(false);
+          return;
+        }
+
+        // If prefetch is in progress, wait for it
+        if (prefetchPromise) {
+          await prefetchPromise;
+          if (cachedNewsData && cachedNewsData.tickersStr === tickersStr) {
+            setTopStories(cachedNewsData.topStories);
+            setOtherStories(cachedNewsData.otherStories);
+            setNewsLoading(false);
+            return;
+          }
+        }
+
+        const params = new URLSearchParams({ tickers: tickersStr });
         const res = await fetch(`/api/news?${params}`);
         
         if (!res.ok) {
@@ -47,8 +106,17 @@ export default function News() {
         }
 
         const data = await res.json();
-        setTopStories(data.top3 || []);
-        setOtherStories(data.theRest || []);
+        const top3 = data.top3 || [];
+        const theRest = data.theRest || [];
+        
+        cachedNewsData = {
+          topStories: top3,
+          otherStories: theRest,
+          tickersStr
+        };
+
+        setTopStories(top3);
+        setOtherStories(theRest);
       } catch (err: any) {
         setError(err.message || 'An error occurred loading news.');
       } finally {

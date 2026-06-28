@@ -7,22 +7,43 @@ import { calculatePortfolioStats, calculateAllocation } from '../../lib/portfoli
 import { TrendingUp, TrendingDown, DollarSign, Activity, Loader } from 'lucide-react';
 import { fetchHistoricalPerformance } from '../../lib/stockPriceService';
 import type { HistoricalDataPoint } from '../../lib/stockPriceService';
+import { prefetchNewsForTickers } from '../news/News';
 
 const COLORS = ['#ff325a', '#cc2848', '#ff5b7b', '#4a111f'];
+
+// Module-level cache for historical data to prevent reloading on tab switch
+let cachedHistoricalData: HistoricalDataPoint[] = [];
+let lastPortfolioTickersForHistory = '';
 
 export default function Home() {
   const { items: portfolio } = usePortfolio();
   const stats = calculatePortfolioStats(portfolio);
   const allocation = calculateAllocation(portfolio);
 
-  const [historicalData, setHistoricalData] = useState<HistoricalDataPoint[]>([]);
-  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [historicalData, setHistoricalData] = useState<HistoricalDataPoint[]>(() => cachedHistoricalData || []);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(() => cachedHistoricalData.length === 0);
 
   useEffect(() => {
     if (portfolio.length > 0) {
+      // Prefetch news data in the background
+      const uniqueTickers = Array.from(new Set(portfolio.map(item => item.ticker))).slice(0, 5);
+      prefetchNewsForTickers(uniqueTickers);
+
+      // Handle historical data caching
+      const currentTickersKey = portfolio.map(i => `${i.ticker}-${i.shares}`).sort().join('|');
+      
+      if (cachedHistoricalData.length > 0 && lastPortfolioTickersForHistory === currentTickersKey) {
+        setHistoricalData(cachedHistoricalData);
+        return;
+      }
+
       setIsLoadingHistory(true);
       fetchHistoricalPerformance(portfolio)
-        .then(data => setHistoricalData(data))
+        .then(data => {
+          cachedHistoricalData = data;
+          lastPortfolioTickersForHistory = currentTickersKey;
+          setHistoricalData(data);
+        })
         .catch(err => console.error(err))
         .finally(() => setIsLoadingHistory(false));
     }
