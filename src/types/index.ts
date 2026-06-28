@@ -6,6 +6,11 @@ export interface PortfolioItem {
   avgPrice: number;
   currentPrice: number;
   buyDate: string;
+  // Dynamic fields adjusted for splits
+  adjustedShares?: number;
+  adjustedAvgPrice?: number;
+  splitMultiplier?: number;
+  splitCount?: number;
 }
 
 export interface NewsArticle {

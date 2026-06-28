@@ -21,7 +21,7 @@ export default function Navbar() {
             <div className="bg-primary/10 p-2 rounded-lg">
               <LineChart className="h-6 w-6 text-primary" />
             </div>
-            <span className="text-xl font-bold tracking-tight text-white">InvestDash</span>
+            <span className="text-xl font-bold tracking-tight text-white">TrackerJack</span>
           </div>
 
           <div className="hidden md:flex items-center gap-1 text-sm font-medium">

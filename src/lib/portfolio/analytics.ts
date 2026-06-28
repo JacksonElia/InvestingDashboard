@@ -16,11 +16,18 @@ export interface AllocationBreakdown {
 }
 
 export function calculateTotalValue(items: PortfolioItem[]): number {
-  return items.reduce((sum, item) => sum + (item.shares * item.currentPrice), 0);
+  return items.reduce((sum, item) => {
+    const shares = item.adjustedShares || item.shares;
+    return sum + (shares * item.currentPrice);
+  }, 0);
 }
 
 export function calculateTotalCost(items: PortfolioItem[]): number {
-  return items.reduce((sum, item) => sum + (item.shares * item.avgPrice), 0);
+  return items.reduce((sum, item) => {
+    const shares = item.adjustedShares || item.shares;
+    const avgPrice = item.adjustedAvgPrice || item.avgPrice;
+    return sum + (shares * avgPrice);
+  }, 0);
 }
 
 export function calculateTotalGain(items: PortfolioItem[]): number {
@@ -59,7 +66,8 @@ export function calculateAllocation(items: PortfolioItem[]): AllocationBreakdown
   }
 
   return items.map(item => {
-    const value = item.shares * item.currentPrice;
+    const shares = item.adjustedShares || item.shares;
+    const value = shares * item.currentPrice;
     const percentOfTotal = (value / totalValue) * 100;
 
     return {

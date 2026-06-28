@@ -1,16 +1,19 @@
 import { useReducer, useCallback, useEffect } from 'react';
 import type { PortfolioItem } from '../types';
 import { portfolioRepository } from '../services/portfolioService';
+import { fetchStockSplits } from '../lib/stockPriceService';
 
 interface PortfolioState {
   items: PortfolioItem[];
   loading: boolean;
   error: string | null;
+  splitWarnings: string[];
 }
 
 type PortfolioAction =
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'SET_ERROR'; payload: string | null }
+  | { type: 'SET_SPLIT_WARNINGS'; payload: string[] }
   | { type: 'SET_ITEMS'; payload: PortfolioItem[] }
   | { type: 'ADD_ITEM'; payload: PortfolioItem }
   | { type: 'UPDATE_ITEM'; payload: PortfolioItem }
@@ -25,6 +28,8 @@ function portfolioReducer(state: PortfolioState, action: PortfolioAction): Portf
       return { ...state, loading: action.payload };
     case 'SET_ERROR':
       return { ...state, error: action.payload };
+    case 'SET_SPLIT_WARNINGS':
+      return { ...state, splitWarnings: action.payload };
     case 'SET_ITEMS':
       return { ...state, items: action.payload, error: null };
     case 'ADD_ITEM':
@@ -59,6 +64,7 @@ const initialState: PortfolioState = {
   items: [],
   loading: true,
   error: null,
+  splitWarnings: [],
 };
 
 export interface UsePortfolioActions {
@@ -74,8 +80,49 @@ export function usePortfolio(): PortfolioState & UsePortfolioActions {
   const fetchAll = useCallback(async () => {
     dispatch({ type: 'SET_LOADING', payload: true });
     try {
-      const items = await portfolioRepository.getAll();
-      dispatch({ type: 'SET_ITEMS', payload: items });
+      const baseItems = await portfolioRepository.getAll();
+      const splitWarnings: string[] = [];
+      
+      // Calculate split adjustments
+      const itemsWithSplits = await Promise.all(baseItems.map(async (item) => {
+        if (!item.buyDate) return item;
+        
+        try {
+          const splits = await fetchStockSplits(item.ticker, item.buyDate);
+          
+          if (splits && splits.length > 0) {
+            let splitMultiplier = 1;
+            splits.forEach(split => {
+              if (split.stockSplits) {
+                const [numerator, denominator] = split.stockSplits.split(':').map(Number);
+                if (numerator && denominator) {
+                  splitMultiplier *= (numerator / denominator);
+                }
+              }
+            });
+
+            if (splitMultiplier !== 1) {
+              return {
+                ...item,
+                adjustedShares: item.shares * splitMultiplier,
+                adjustedAvgPrice: item.avgPrice / splitMultiplier,
+                splitMultiplier,
+                splitCount: splits.length
+              };
+            }
+          }
+        } catch (e) {
+          console.error(`Failed to fetch splits for ${item.ticker}`, e);
+          splitWarnings.push(
+            `Could not verify splits for ${item.ticker} (${item.name}): ${e instanceof Error ? e.message : 'Unknown error'}`
+          );
+        }
+        
+        return item;
+      }));
+
+      dispatch({ type: 'SET_ITEMS', payload: itemsWithSplits });
+      dispatch({ type: 'SET_SPLIT_WARNINGS', payload: splitWarnings });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to fetch portfolio';
       dispatch({ type: 'SET_ERROR', payload: errorMessage });
@@ -104,13 +151,16 @@ export function usePortfolio(): PortfolioState & UsePortfolioActions {
   }, []);
 
   const updateItem = useCallback(async (id: string, item: Omit<PortfolioItem, 'id'>) => {
-    const optimisticItem: PortfolioItem = { ...item, id };
+    const existingItem = state.items.find(currentItem => currentItem.id === id);
+    const optimisticItem: PortfolioItem = existingItem
+      ? { ...existingItem, ...item, id }
+      : { ...item, id };
     const previousItems = state.items;
 
     dispatch({ type: 'OPTIMISTIC_UPDATE', payload: optimisticItem });
 
     try {
-      const updated = await portfolioRepository.update(id, item);
+      const updated = await portfolioRepository.update(id, optimisticItem);
       dispatch({ type: 'UPDATE_ITEM', payload: updated });
     } catch (error) {
       dispatch({ type: 'SET_ITEMS', payload: previousItems });

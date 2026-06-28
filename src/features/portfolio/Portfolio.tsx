@@ -175,6 +175,8 @@ export default function Portfolio() {
         </div>
       )}
 
+      
+
       <Card>
         <CardHeader 
           title="Holdings" 
@@ -214,8 +216,11 @@ export default function Portfolio() {
                 <tbody className="divide-y divide-surfaceHighlight">
                   {filteredPortfolio.map((item) => {
                     const { price: displayPrice, isLoading: isPriceLoading } = getDisplayPrice(item);
-                    const totalValue = item.shares * displayPrice;
-                    const percentChange = item.avgPrice > 0 ? ((displayPrice - item.avgPrice) / item.avgPrice) * 100 : 0;
+                    const effectiveShares = item.adjustedShares ?? item.shares;
+                    const effectiveAvgPrice = item.adjustedAvgPrice ?? item.avgPrice;
+                    
+                    const totalValue = effectiveShares * displayPrice;
+                    const percentChange = effectiveAvgPrice > 0 ? ((displayPrice - effectiveAvgPrice) / effectiveAvgPrice) * 100 : 0;
                     
                     return (
                       <tr key={item.id} className="hover:bg-surfaceHighlight/30 transition-colors">
@@ -223,9 +228,20 @@ export default function Portfolio() {
                           <div className="font-semibold text-white">{item.ticker}</div>
                           <div className="text-textMuted text-xs">{item.name}</div>
                         </td>
-                        <td className="px-6 py-4 text-white">{item.shares}</td>
+                        <td className="px-6 py-4 text-white">
+                          <div className="flex items-center gap-2">
+                            {item.adjustedShares ?? item.shares}
+                            {item.splitMultiplier && (
+                              <span title={`Adjusted for ${item.splitCount} split(s) (x${item.splitMultiplier.toFixed(2)})`} className="cursor-help text-blue-400">
+                                (Split-Adj)
+                              </span>
+                            )}
+                          </div>
+                        </td>
                         <td className="px-6 py-4 text-white">{item.buyDate ? new Date(item.buyDate).toLocaleDateString() : 'N/A'}</td>
-                        <td className="px-6 py-4 text-white">${item.avgPrice.toFixed(2)}</td>
+                        <td className="px-6 py-4 text-white">
+                          ${(item.adjustedAvgPrice ?? item.avgPrice).toFixed(2)}
+                        </td>
                         <td className="px-6 py-4 text-white">
                           <div className="flex items-center gap-2">
                             ${displayPrice.toFixed(2)}

@@ -55,6 +55,58 @@ export default defineConfig({
           }));
         });
 
+
+        // Stock Splits Mock API
+        server.middlewares.use('/api/stock-splits', async (req, res) => {
+          if (req.method !== 'GET') {
+            res.statusCode = 405;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ error: 'Method not allowed' }));
+            return;
+          }
+
+          const url = new URL(req.url ?? '', 'http://localhost');
+          const ticker = url.searchParams.get('ticker');
+          const startDate = url.searchParams.get('startDate');
+          const endDate = url.searchParams.get('endDate');
+
+          if (!ticker || !startDate) {
+            res.statusCode = 400;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ error: 'ticker and startDate are required' }));
+            return;
+          }
+
+          try {
+            const { default: stockSplitsHandler } = await import('./api/stock-splits');
+            
+            const mockReq = {
+              method: 'GET',
+              query: { ticker, startDate, endDate },
+            } as any;
+
+            let statusCode = 200;
+            const mockRes: any = {
+              status: (code: number) => {
+                statusCode = code;
+                return mockRes;
+              },
+              json: (data: any) => {
+                res.statusCode = statusCode;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify(data));
+              }
+            };
+
+            await stockSplitsHandler(mockReq, mockRes);
+          } catch (err) {
+             console.error(err);
+             res.statusCode = 500;
+             res.setHeader('Content-Type', 'application/json');
+             res.end(JSON.stringify({ error: 'Failed to process stock splits' }));
+          }
+        });
+
         // Historical Price Mock API
         server.middlewares.use('/api/historical-price', async (req, res) => {
           if (req.method !== 'GET') {

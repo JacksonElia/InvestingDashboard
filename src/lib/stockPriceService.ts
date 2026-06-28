@@ -127,8 +127,8 @@ export async function fetchHistoricalPerformance(items: PortfolioItem[]): Promis
   try {
     const payload = items.map(item => ({
       ticker: item.ticker,
-      shares: item.shares,
-      avgPrice: item.avgPrice,
+      shares: item.adjustedShares || item.shares, // Use adjusted shares since Yahoo returns adjusted close prices
+      avgPrice: item.adjustedAvgPrice || item.avgPrice,
       buyDate: item.buyDate || new Date().toISOString().split('T')[0]
     }));
 
@@ -173,5 +173,34 @@ export async function fetchHistoricalPriceForDate(ticker: string, date: string):
   } catch (error) {
     console.error('Error fetching historical price:', error);
     throw error;
+  }
+}
+
+export interface SplitEvent {
+  date: string;
+  stockSplits: string;
+}
+
+const STOCK_SPLITS_API_URL = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/stock-price', '/stock-splits') : '/api/stock-splits';
+
+export async function fetchStockSplits(ticker: string, startDate: string, endDate?: string): Promise<SplitEvent[]> {
+  const normalizedTicker = ticker.toUpperCase().trim();
+  try {
+    let url = `${STOCK_SPLITS_API_URL}?ticker=${encodeURIComponent(normalizedTicker)}&startDate=${encodeURIComponent(startDate)}`;
+    if (endDate) {
+      url += `&endDate=${encodeURIComponent(endDate)}`;
+    }
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data as SplitEvent[];
+  } catch (error) {
+    console.error('Error fetching stock splits:', error);
+    throw new Error(`Unable to fetch stock splits for ${normalizedTicker}`, { cause: error });
   }
 }
