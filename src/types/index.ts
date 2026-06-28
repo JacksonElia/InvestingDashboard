@@ -5,7 +5,7 @@ export interface PortfolioItem {
   shares: number;
   avgPrice: number;
   currentPrice: number;
-  dailyChange: number;
+  buyDate: string;
 }
 
 export interface NewsArticle {

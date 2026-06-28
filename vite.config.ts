@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { lookupStockData } from './src/lib/stockPriceLookup'
+import historicalPerformanceHandler from './api/historical-performance'
 import * as dotenv from 'dotenv';
 dotenv.config(); // Load .env file for local development
 
@@ -52,6 +53,85 @@ export default defineConfig({
             names: prices.names,
             timestamp: new Date().toISOString(),
           }));
+        });
+
+        // Historical Price Mock API
+        server.middlewares.use('/api/historical-price', async (req, res) => {
+          if (req.method !== 'GET') {
+            res.statusCode = 405;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ error: 'Method not allowed' }));
+            return;
+          }
+
+          const url = new URL(req.url ?? '', 'http://localhost');
+          const ticker = url.searchParams.get('ticker');
+          const date = url.searchParams.get('date');
+
+          if (!ticker || !date) {
+            res.statusCode = 400;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ error: 'ticker and date are required' }));
+            return;
+          }
+
+          try {
+            // Re-use the Vercel handler logic
+            const { default: historicalPriceHandler } = await import('./api/historical-price');
+            
+            // Mock VercelRequest & VercelResponse
+            const mockReq = {
+              method: 'GET',
+              query: { ticker, date },
+            } as any;
+
+            let statusCode = 200;
+            const mockRes = {
+              status: (code: number) => {
+                statusCode = code;
+                return mockRes;
+              },
+              json: (data: any) => {
+                res.statusCode = statusCode;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify(data));
+              }
+            } as any;
+
+            await historicalPriceHandler(mockReq, mockRes);
+          } catch (err: any) {
+             console.error(err);
+             res.statusCode = 500;
+             res.setHeader('Content-Type', 'application/json');
+             res.end(JSON.stringify({ error: 'Failed to process historical price' }));
+          }
+        });
+
+        // Historical Performance Mock API
+        server.middlewares.use('/api/historical-performance', (req, res) => {
+          let body = '';
+          req.on('data', chunk => {
+            body += chunk.toString();
+          });
+          req.on('end', async () => {
+            try {
+              (req as any).body = JSON.parse(body);
+              (res as any).status = (code: number) => {
+                res.statusCode = code;
+                return res;
+              };
+              (res as any).json = (data: any) => {
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify(data));
+              };
+              await historicalPerformanceHandler(req as any, res as any);
+            } catch (err: any) {
+              console.error('Error in historical-performance middleware:', err);
+              res.statusCode = 500;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({ error: err.message || 'Failed to parse body' }));
+            }
+          });
         });
 
         // News Mock API

@@ -50,7 +50,7 @@ export default function Portfolio() {
         priceMap.forEach((fetchedPrice, ticker) => {
           if (fetchedPrice !== null) {
             const item = items.find(i => i.ticker === ticker);
-            if (item && item.currentPrice !== fetchedPrice) {
+              if (item && item.currentPrice !== fetchedPrice) {
               const updatedItem = { ...item, currentPrice: fetchedPrice };
               updateItem(item.id, {
                 ticker: updatedItem.ticker,
@@ -58,7 +58,7 @@ export default function Portfolio() {
                 shares: updatedItem.shares,
                 avgPrice: updatedItem.avgPrice,
                 currentPrice: updatedItem.currentPrice,
-                dailyChange: updatedItem.dailyChange,
+                buyDate: updatedItem.buyDate,
               });
             }
           }
@@ -203,10 +203,10 @@ export default function Portfolio() {
                   <tr>
                     <th className="px-6 py-4 font-medium">Asset</th>
                     <th className="px-6 py-4 font-medium">Shares</th>
+                    <th className="px-6 py-4 font-medium">Buy Date</th>
                     <th className="px-6 py-4 font-medium">Price When Bought</th>
                     <th className="px-6 py-4 font-medium">Current Price</th>
                     <th className="px-6 py-4 font-medium">Total Value</th>
-                    <th className="px-6 py-4 font-medium">Today's Return</th>
                     <th className="px-6 py-4 font-medium text-right">Actions</th>
                   </tr>
                 </thead>
@@ -214,7 +214,6 @@ export default function Portfolio() {
                   {filteredPortfolio.map((item) => {
                     const { price: displayPrice, isLoading: isPriceLoading } = getDisplayPrice(item);
                     const totalValue = item.shares * displayPrice;
-                    const isPositive = item.dailyChange >= 0;
                     
                     return (
                       <tr key={item.id} className="hover:bg-surfaceHighlight/30 transition-colors">
@@ -223,6 +222,7 @@ export default function Portfolio() {
                           <div className="text-textMuted text-xs">{item.name}</div>
                         </td>
                         <td className="px-6 py-4 text-white">{item.shares}</td>
+                        <td className="px-6 py-4 text-white">{item.buyDate ? new Date(item.buyDate).toLocaleDateString() : 'N/A'}</td>
                         <td className="px-6 py-4 text-white">${item.avgPrice.toFixed(2)}</td>
                         <td className="px-6 py-4 text-white">
                           <div className="flex items-center gap-2">
@@ -233,9 +233,6 @@ export default function Portfolio() {
                           </div>
                         </td>
                         <td className="px-6 py-4 font-medium text-white">${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                        <td className={`px-6 py-4 font-medium ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
-                          {isPositive ? '+' : ''}{item.dailyChange}%
-                        </td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex justify-end gap-2">
                             <Button

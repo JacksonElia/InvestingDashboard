@@ -1,3 +1,5 @@
+import type { PortfolioItem } from '../types';
+
 interface BackendPrices {
   prices: Record<string, number | null>;
   names: Record<string, string | null>;
@@ -6,6 +8,8 @@ interface BackendPrices {
 
 // API URL - uses environment variable or defaults to relative path
 const API_URL = import.meta.env.VITE_API_URL || '/api/stock-price';
+const HISTORICAL_API_URL = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/stock-price', '/historical-performance') : '/api/historical-performance';
+const HISTORICAL_PRICE_API_URL = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/stock-price', '/historical-price') : '/api/historical-price';
 
 // Local cache for prices on the client side
 const priceCache = new Map<string, { price: number; name: string; timestamp: number }>();
@@ -108,4 +112,66 @@ export function clearPriceCache(): void {
 export function invalidateCachedPrice(ticker: string): void {
   const normalizedTicker = ticker.toUpperCase().trim();
   priceCache.delete(normalizedTicker);
+}
+
+export interface HistoricalDataPoint {
+  date: string;
+  month: string;
+  portfolioValue: number;
+  sp500Value: number;
+  investedCash: number;
+  inflationAdjustedCost: number;
+}
+
+export async function fetchHistoricalPerformance(items: PortfolioItem[]): Promise<HistoricalDataPoint[]> {
+  try {
+    const payload = items.map(item => ({
+      ticker: item.ticker,
+      shares: item.shares,
+      avgPrice: item.avgPrice,
+      buyDate: item.buyDate || new Date().toISOString().split('T')[0]
+    }));
+
+    const response = await fetch(HISTORICAL_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ items: payload })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.chartData || [];
+  } catch (error) {
+    console.error('Error fetching historical performance:', error);
+    throw error;
+  }
+}
+
+export async function fetchHistoricalPriceForDate(ticker: string, date: string): Promise<number> {
+  const normalizedTicker = ticker.toUpperCase().trim();
+  try {
+    const url = `${HISTORICAL_PRICE_API_URL}?ticker=${encodeURIComponent(normalizedTicker)}&date=${encodeURIComponent(date)}`;
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (typeof data.close !== 'number' || isNaN(data.close) || data.close <= 0) {
+      throw new Error(`Invalid historical price value for ${normalizedTicker} on ${date}`);
+    }
+
+    return data.close;
+  } catch (error) {
+    console.error('Error fetching historical price:', error);
+    throw error;
+  }
 }

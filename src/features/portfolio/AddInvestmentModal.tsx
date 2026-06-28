@@ -4,7 +4,7 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Card } from '../../components/ui/Card';
 import { X } from 'lucide-react';
-import { fetchStockInfo } from '../../lib/stockPriceService';
+import { fetchStockInfo, fetchHistoricalPriceForDate } from '../../lib/stockPriceService';
 
 interface AddInvestmentModalProps {
   isOpen: boolean;
@@ -19,11 +19,12 @@ export default function AddInvestmentModal({ isOpen, onClose, onAdd }: AddInvest
     shares: '',
     avgPrice: '',
     currentPrice: '',
-    dailyChange: '0',
+    buyDate: new Date().toISOString().split('T')[0],
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [priceError, setPriceError] = useState('');
+  const [fetchingHistoricalPrice, setFetchingHistoricalPrice] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -38,6 +39,32 @@ export default function AddInvestmentModal({ isOpen, onClose, onAdd }: AddInvest
       return () => document.removeEventListener('keydown', handleEscape);
     }
   }, [isOpen, onClose]);
+
+  // Auto-fetch historical price when ticker or buyDate changes
+  useEffect(() => {
+    const getHistoricalPrice = async () => {
+      const ticker = formData.ticker.trim();
+      const date = formData.buyDate;
+      if (!ticker || !date) return;
+
+      setFetchingHistoricalPrice(true);
+      try {
+        const closePrice = await fetchHistoricalPriceForDate(ticker, date);
+        setFormData(prev => ({
+          ...prev,
+          avgPrice: closePrice.toFixed(2)
+        }));
+      } catch (err) {
+        // We silently fail historical fetch, user can manually input if needed
+        console.error('Could not fetch historical price', err);
+      } finally {
+        setFetchingHistoricalPrice(false);
+      }
+    };
+
+    const delay = setTimeout(getHistoricalPrice, 600); // Debounce to avoid spamming
+    return () => clearTimeout(delay);
+  }, [formData.ticker, formData.buyDate]);
 
   const handleFetchPrice = async (ticker: string) => {
     const trimmedTicker = ticker.trim();
@@ -113,6 +140,11 @@ export default function AddInvestmentModal({ isOpen, onClose, onAdd }: AddInvest
       }
     }
 
+    if (!formData.buyDate.trim()) {
+      setError('Buy date is required');
+      return false;
+    }
+
     return true;
   };
 
@@ -154,7 +186,7 @@ export default function AddInvestmentModal({ isOpen, onClose, onAdd }: AddInvest
         shares: parseFloat(formData.shares),
         avgPrice: parseFloat(formData.avgPrice),
         currentPrice,
-        dailyChange: parseFloat(formData.dailyChange || '0'),
+        buyDate: formData.buyDate,
       });
 
       setFormData({
@@ -163,7 +195,7 @@ export default function AddInvestmentModal({ isOpen, onClose, onAdd }: AddInvest
         shares: '',
         avgPrice: '',
         currentPrice: '',
-        dailyChange: '0',
+        buyDate: new Date().toISOString().split('T')[0],
       });
       onClose();
     } catch (err) {
@@ -265,6 +297,7 @@ export default function AddInvestmentModal({ isOpen, onClose, onAdd }: AddInvest
             <div>
               <label className="block text-sm font-medium text-white mb-2">
                 Price When Bought ($)
+                {fetchingHistoricalPrice && <span className="ml-2 text-xs text-blue-400 italic">Fetching close...</span>}
               </label>
               <Input
                 type="number"
@@ -272,8 +305,11 @@ export default function AddInvestmentModal({ isOpen, onClose, onAdd }: AddInvest
                 step="0.01"
                 value={formData.avgPrice}
                 onChange={(e) => setFormData({ ...formData, avgPrice: e.target.value })}
-                disabled={loading}
+                disabled={loading || fetchingHistoricalPrice}
               />
+              <p className="mt-1 text-xs text-textMuted">
+                Auto-filled to closing price. Edit if needed.
+              </p>
             </div>
           </div>
 
@@ -291,20 +327,18 @@ export default function AddInvestmentModal({ isOpen, onClose, onAdd }: AddInvest
                 disabled={loading}
               />
               <p className="mt-1 text-xs text-textMuted">
-                Fetched automatically from the ticker.
+                Fetched automatically.
               </p>
             </div>
 
             <div>
               <label className="block text-sm font-medium text-white mb-2">
-                Daily Change (%)
+                Buy Date
               </label>
               <Input
-                type="number"
-                placeholder="0"
-                step="0.01"
-                value={formData.dailyChange}
-                onChange={(e) => setFormData({ ...formData, dailyChange: e.target.value })}
+                type="date"
+                value={formData.buyDate}
+                onChange={(e) => setFormData({ ...formData, buyDate: e.target.value })}
                 disabled={loading}
               />
             </div>

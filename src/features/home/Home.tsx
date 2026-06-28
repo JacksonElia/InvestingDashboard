@@ -1,9 +1,12 @@
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { useState, useEffect } from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { Card, CardContent, CardHeader } from '../../components/ui/Card';
 import { mockPerformanceData, mockAllocationData } from '../../lib/mockData';
 import { usePortfolio } from '../../hooks/usePortfolio';
 import { calculatePortfolioStats, calculateAllocation } from '../../lib/portfolio/analytics';
-import { TrendingUp, DollarSign, Activity } from 'lucide-react';
+import { TrendingUp, DollarSign, Activity, Loader } from 'lucide-react';
+import { fetchHistoricalPerformance } from '../../lib/stockPriceService';
+import type { HistoricalDataPoint } from '../../lib/stockPriceService';
 
 const COLORS = ['#ff325a', '#cc2848', '#ff5b7b', '#4a111f'];
 
@@ -11,6 +14,19 @@ export default function Home() {
   const { items: portfolio } = usePortfolio();
   const stats = calculatePortfolioStats(portfolio);
   const allocation = calculateAllocation(portfolio);
+
+  const [historicalData, setHistoricalData] = useState<HistoricalDataPoint[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+
+  useEffect(() => {
+    if (portfolio.length > 0) {
+      setIsLoadingHistory(true);
+      fetchHistoricalPerformance(portfolio)
+        .then(data => setHistoricalData(data))
+        .catch(err => console.error(err))
+        .finally(() => setIsLoadingHistory(false));
+    }
+  }, [portfolio]);
 
   const allocationForChart = allocation.map(item => ({
     name: item.ticker,
@@ -66,19 +82,33 @@ export default function Home() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-2">
-          <CardHeader title="Performance History" subtitle="Portfolio value over time" />
+          <CardHeader title="Performance History" subtitle="Portfolio vs S&P 500 & Inflation" />
           <CardContent>
-            <div className="h-[300px] w-full mt-4">
+            <div className="h-[300px] w-full mt-4 relative">
+              {isLoadingHistory && (
+                <div className="absolute inset-0 z-10 flex items-center justify-center bg-surface/50 backdrop-blur-sm rounded-lg">
+                  <div className="flex flex-col items-center gap-2">
+                    <Loader className="h-8 w-8 text-primary animate-spin" />
+                    <p className="text-sm text-textMuted">Calculating historical performance...</p>
+                  </div>
+                </div>
+              )}
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={mockPerformanceData}>
+                <LineChart data={(historicalData.length > 0 ? historicalData : mockPerformanceData) as any[]}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#2e303a" vertical={false} />
                   <XAxis dataKey="month" stroke="#a0a0a0" tick={{ fill: '#a0a0a0' }} axisLine={false} tickLine={false} />
                   <YAxis stroke="#a0a0a0" tick={{ fill: '#a0a0a0' }} axisLine={false} tickLine={false} tickFormatter={(val) => `$${val/1000}k`} />
                   <Tooltip 
                     contentStyle={{ backgroundColor: '#121212', borderColor: '#1e1e1e', color: '#fff' }}
-                    itemStyle={{ color: '#ff325a' }}
                   />
-                  <Line type="monotone" dataKey="value" stroke="#ff325a" strokeWidth={3} dot={{ fill: '#000', stroke: '#ff325a', strokeWidth: 2 }} activeDot={{ r: 6, fill: '#ff325a' }} />
+                  <Legend verticalAlign="top" height={36} iconType="circle" />
+                  <Line name="Portfolio Value" type="monotone" dataKey={historicalData.length > 0 ? "portfolioValue" : "value"} stroke="#ff325a" strokeWidth={3} dot={false} activeDot={{ r: 6, fill: '#ff325a' }} />
+                  {historicalData.length > 0 && (
+                    <>
+                      <Line name="S&P 500 (Simulated)" type="monotone" dataKey="sp500Value" stroke="#3b82f6" strokeWidth={2} dot={false} />
+                      <Line name="Cost Basis (Inflation Adj)" type="monotone" dataKey="inflationAdjustedCost" stroke="#10b981" strokeWidth={2} strokeDasharray="5 5" dot={false} />
+                    </>
+                  )}
                 </LineChart>
               </ResponsiveContainer>
             </div>

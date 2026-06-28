@@ -5,6 +5,8 @@ import { Input } from '../../components/ui/Input';
 import { Card } from '../../components/ui/Card';
 import { X } from 'lucide-react';
 
+import { fetchHistoricalPriceForDate } from '../../lib/stockPriceService';
+
 interface EditInvestmentModalProps {
   isOpen: boolean;
   item: PortfolioItem | null;
@@ -18,7 +20,7 @@ interface FormData {
   shares: string;
   avgPrice: string;
   currentPrice: string;
-  dailyChange: string;
+  buyDate: string;
 }
 
 export default function EditInvestmentModal({ isOpen, item, onClose, onUpdate }: EditInvestmentModalProps) {
@@ -28,10 +30,11 @@ export default function EditInvestmentModal({ isOpen, item, onClose, onUpdate }:
     shares: '',
     avgPrice: '',
     currentPrice: '',
-    dailyChange: '0',
+    buyDate: new Date().toISOString().split('T')[0],
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [fetchingHistoricalPrice, setFetchingHistoricalPrice] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
 
   // Update form data when item changes (intentional setState in effect to sync form with prop)
@@ -44,10 +47,40 @@ export default function EditInvestmentModal({ isOpen, item, onClose, onUpdate }:
         shares: item.shares.toString(),
         avgPrice: item.avgPrice.toString(),
         currentPrice: item.currentPrice.toString(),
-        dailyChange: item.dailyChange.toString(),
+        buyDate: item.buyDate || new Date().toISOString().split('T')[0],
       });
     }
   }, [item]);
+
+  // Auto-fetch historical price when buyDate changes
+  useEffect(() => {
+    const getHistoricalPrice = async () => {
+      // Don't auto-fetch if we are just loading the modal with existing item data
+      if (item && formData.buyDate === (item.buyDate || new Date().toISOString().split('T')[0])) {
+        return;
+      }
+
+      const ticker = formData.ticker.trim();
+      const date = formData.buyDate;
+      if (!ticker || !date) return;
+
+      setFetchingHistoricalPrice(true);
+      try {
+        const closePrice = await fetchHistoricalPriceForDate(ticker, date);
+        setFormData(prev => ({
+          ...prev,
+          avgPrice: closePrice.toFixed(2)
+        }));
+      } catch (err) {
+        console.error('Could not fetch historical price', err);
+      } finally {
+        setFetchingHistoricalPrice(false);
+      }
+    };
+
+    const delay = setTimeout(getHistoricalPrice, 600);
+    return () => clearTimeout(delay);
+  }, [formData.buyDate, formData.ticker, item]);
 
   const validateForm = (): boolean => {
     setError('');
@@ -77,6 +110,11 @@ export default function EditInvestmentModal({ isOpen, item, onClose, onUpdate }:
     const currentPrice = parseFloat(formData.currentPrice);
     if (!formData.currentPrice.trim() || isNaN(currentPrice) || currentPrice <= 0) {
       setError('Current price must be a positive number');
+      return false;
+    }
+
+    if (!formData.buyDate.trim()) {
+      setError('Buy date is required');
       return false;
     }
 
@@ -115,7 +153,7 @@ export default function EditInvestmentModal({ isOpen, item, onClose, onUpdate }:
         shares: parseFloat(formData.shares),
         avgPrice: parseFloat(formData.avgPrice),
         currentPrice: parseFloat(formData.currentPrice),
-        dailyChange: parseFloat(formData.dailyChange || '0'),
+        buyDate: formData.buyDate,
       });
 
       onClose();
@@ -201,6 +239,7 @@ export default function EditInvestmentModal({ isOpen, item, onClose, onUpdate }:
             <div>
               <label className="block text-sm font-medium text-white mb-2">
                 Price When Bought ($)
+                {fetchingHistoricalPrice && <span className="ml-2 text-xs text-blue-400 italic">Fetching close...</span>}
               </label>
               <Input
                 type="number"
@@ -208,8 +247,11 @@ export default function EditInvestmentModal({ isOpen, item, onClose, onUpdate }:
                 step="0.01"
                 value={formData.avgPrice}
                 onChange={(e) => setFormData({ ...formData, avgPrice: e.target.value })}
-                disabled={loading}
+                disabled={loading || fetchingHistoricalPrice}
               />
+              <p className="mt-1 text-xs text-textMuted">
+                Auto-fills to closing price on date change.
+              </p>
             </div>
           </div>
 
@@ -230,14 +272,12 @@ export default function EditInvestmentModal({ isOpen, item, onClose, onUpdate }:
 
             <div>
               <label className="block text-sm font-medium text-white mb-2">
-                Daily Change (%)
+                Buy Date
               </label>
               <Input
-                type="number"
-                placeholder="0"
-                step="0.01"
-                value={formData.dailyChange}
-                onChange={(e) => setFormData({ ...formData, dailyChange: e.target.value })}
+                type="date"
+                value={formData.buyDate}
+                onChange={(e) => setFormData({ ...formData, buyDate: e.target.value })}
                 disabled={loading}
               />
             </div>
