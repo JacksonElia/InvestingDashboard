@@ -92,7 +92,7 @@ Return a JSON object with this exact structure:
 CRITICAL: Return ONLY valid JSON. Do not include markdown code blocks like \`\`\`json. Just the raw JSON object.
     `;
 
-    const geminiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+    const geminiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -111,11 +111,16 @@ CRITICAL: Return ONLY valid JSON. Do not include markdown code blocks like \`\`\
     });
 
     if (!geminiResponse.ok) {
-      throw new Error(`Gemini API returned ${geminiResponse.status}`);
+      const errorText = await geminiResponse.text();
+      console.error('Gemini API Error Response:', errorText);
+      throw new Error(`Gemini API returned ${geminiResponse.status}: ${errorText}`);
     }
 
     const geminiData = await geminiResponse.json();
-    const responseText = geminiData.candidates[0].content.parts[0].text;
+    let responseText = geminiData.candidates[0].content.parts[0].text;
+    
+    // Clean up possible markdown formatting if the model ignored our instruction
+    responseText = responseText.replace(/```json/gi, '').replace(/```/g, '').trim();
     
     // Parse the generated JSON
     const parsedNews = JSON.parse(responseText);
