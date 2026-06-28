@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader } from '../../components/ui/Card';
 import { mockPerformanceData, mockAllocationData } from '../../lib/mockData';
 import { usePortfolio } from '../../hooks/usePortfolio';
 import { calculatePortfolioStats, calculateAllocation } from '../../lib/portfolio/analytics';
-import { TrendingUp, TrendingDown, DollarSign, Activity, Loader } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, Activity, Loader, PieChart as PieChartIcon } from 'lucide-react';
 import { fetchHistoricalPerformance } from '../../lib/stockPriceService';
 import type { HistoricalDataPoint } from '../../lib/stockPriceService';
 import { prefetchNewsForTickers } from '../news/News';
@@ -53,6 +53,8 @@ export default function Home() {
     name: item.ticker,
     value: Math.round(item.percentOfTotal),
   }));
+
+  const isPortfolioEmpty = portfolio.length === 0;
 
   return (
     <div className="space-y-6">
@@ -110,7 +112,16 @@ export default function Home() {
           <CardHeader title="Performance History" subtitle="Portfolio vs S&P 500 & Inflation" />
           <CardContent>
             <div className="h-[300px] w-full mt-4 relative">
-              {isLoadingHistory && (
+              {isPortfolioEmpty && (
+                <div className="absolute inset-0 z-20 flex items-center justify-center bg-surface/80 backdrop-blur-sm rounded-lg">
+                  <div className="flex flex-col items-center gap-2 p-6 text-center">
+                    <TrendingUp className="h-10 w-10 text-textMuted mb-2 opacity-50" />
+                    <p className="text-lg font-medium text-white">No performance data yet</p>
+                    <p className="text-sm text-textMuted">Add investments to your portfolio to see your historical performance here.</p>
+                  </div>
+                </div>
+              )}
+              {isLoadingHistory && !isPortfolioEmpty && (
                 <div className="absolute inset-0 z-10 flex items-center justify-center bg-surface/50 backdrop-blur-sm rounded-lg">
                   <div className="flex flex-col items-center gap-2">
                     <Loader className="h-8 w-8 text-primary animate-spin" />
@@ -127,7 +138,7 @@ export default function Home() {
                     contentStyle={{ backgroundColor: '#121212', borderColor: '#1e1e1e', color: '#fff' }}
                   />
                   <Legend verticalAlign="top" height={36} iconType="circle" />
-                  <Line name="Portfolio Value" type="monotone" dataKey={historicalData.length > 0 ? "portfolioValue" : "value"} stroke="#ff325a" strokeWidth={3} dot={false} activeDot={{ r: 6, fill: '#ff325a' }} />
+                  <Line name="Portfolio Value" type="monotone" dataKey={historicalData.length > 0 ? "portfolioValue" : "value"} stroke={isPortfolioEmpty ? "#4a4a4a" : "#ff325a"} strokeWidth={3} dot={false} activeDot={{ r: 6, fill: '#ff325a' }} />
                   {historicalData.length > 0 && (
                     <>
                       <Line name="S&P 500 (Simulated)" type="monotone" dataKey="sp500Value" stroke="#3b82f6" strokeWidth={2} dot={false} />
@@ -143,7 +154,16 @@ export default function Home() {
         <Card>
           <CardHeader title="Asset Allocation" subtitle="By ticker" />
           <CardContent>
-            <div className="h-[300px] w-full flex items-center justify-center mt-4">
+            <div className="h-[300px] w-full flex items-center justify-center mt-4 relative">
+              {isPortfolioEmpty && (
+                <div className="absolute inset-0 z-20 flex items-center justify-center bg-surface/80 backdrop-blur-sm rounded-lg">
+                  <div className="flex flex-col items-center gap-2 p-6 text-center">
+                    <PieChartIcon className="h-10 w-10 text-textMuted mb-2 opacity-50" />
+                    <p className="text-lg font-medium text-white">No allocation data</p>
+                    <p className="text-sm text-textMuted">Add investments to see your portfolio breakdown.</p>
+                  </div>
+                </div>
+              )}
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
@@ -157,7 +177,7 @@ export default function Home() {
                     stroke="none"
                   >
                     {(allocationForChart.length > 0 ? allocationForChart : mockAllocationData).map((_, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      <Cell key={`cell-${index}`} fill={isPortfolioEmpty ? "#4a4a4a" : COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
                   <Tooltip 
@@ -168,7 +188,7 @@ export default function Home() {
               </ResponsiveContainer>
             </div>
             <div className="flex flex-wrap justify-center gap-4 mt-2">
-              {(allocationForChart.length > 0 ? allocationForChart : mockAllocationData).map((entry, index) => (
+              {!isPortfolioEmpty && (allocationForChart.length > 0 ? allocationForChart : mockAllocationData).map((entry, index) => (
                 <div key={entry.name} className="flex items-center text-xs text-textMuted">
                   <div className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
                   {entry.name} ({entry.value}%)

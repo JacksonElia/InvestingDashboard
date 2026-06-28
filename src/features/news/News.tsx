@@ -62,7 +62,12 @@ export default function News() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (portfolioLoading || items.length === 0) return;
+    if (portfolioLoading) return;
+
+    if (items.length === 0) {
+      setNewsLoading(false);
+      return;
+    }
 
     const fetchNews = async () => {
       setNewsLoading(true);
@@ -240,8 +245,13 @@ export default function News() {
                 </div>
               )}
               {filteredNews.length === 0 && otherStories.length === 0 && !newsLoading && topStories.length === 0 && (
-                <div className="text-center py-12 text-textMuted">
-                  {items.length === 0 ? "Add investments to your portfolio to see related news." : "No recent news found for your portfolio."}
+                <div className="text-center py-12 text-textMuted flex flex-col items-center gap-2">
+                  <p className="text-lg font-medium text-white">{items.length === 0 ? "Your portfolio is empty" : "No recent news found for your portfolio."}</p>
+                  <p>
+                    {items.length === 0 
+                      ? "Once you've added some stocks to your portfolio, reload the page to see related news." 
+                      : "Check back later for updates."}
+                  </p>
                 </div>
               )}
             </div>
